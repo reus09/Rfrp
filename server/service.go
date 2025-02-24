@@ -62,7 +62,7 @@ const (
 )
 
 func init() {
-	crypto.DefaultSalt = "frp"
+	crypto.DefaultSalt = "reus09"
 	// Disable quic-go's receive buffer warning.
 	os.Setenv("QUIC_GO_DISABLE_RECEIVE_BUFFER_WARNING", "true")
 	// Disable quic-go's ECN support by default. It may cause issues on certain operating systems.
@@ -128,6 +128,8 @@ type Service struct {
 }
 
 func NewService(cfg *v1.ServerConfig) (*Service, error) {
+
+	// 提取TLS 的配置
 	tlsConfig, err := transport.NewServerTLSConfig(
 		cfg.Transport.TLS.CertFile,
 		cfg.Transport.TLS.KeyFile,
@@ -136,6 +138,7 @@ func NewService(cfg *v1.ServerConfig) (*Service, error) {
 		return nil, err
 	}
 
+	// 如果配置了Web服务接口，则传入配置，并新建一个http服务
 	var webServer *httppkg.Server
 	if cfg.WebServer.Port > 0 {
 		ws, err := httppkg.NewServer(cfg.WebServer)
@@ -150,6 +153,7 @@ func NewService(cfg *v1.ServerConfig) (*Service, error) {
 		}
 	}
 
+	// 初始化Service对象。
 	svr := &Service{
 		ctlManager:    NewControlManager(),
 		pxyManager:    proxy.NewManager(),
@@ -172,6 +176,7 @@ func NewService(cfg *v1.ServerConfig) (*Service, error) {
 	}
 
 	// Create tcpmux httpconnect multiplexer.
+	// 如果配置了TCPMuxHTTPConnectPort端口，新建服务
 	if cfg.TCPMuxHTTPConnectPort > 0 {
 		var l net.Listener
 		address := net.JoinHostPort(cfg.ProxyBindAddr, strconv.Itoa(cfg.TCPMuxHTTPConnectPort))
@@ -188,6 +193,7 @@ func NewService(cfg *v1.ServerConfig) (*Service, error) {
 	}
 
 	// Init all plugins
+	// 初始化所有的HTTP Plugins插件
 	for _, p := range cfg.HTTPPlugins {
 		svr.pluginManager.Register(plugin.NewHTTPPluginOptions(p))
 		log.Infof("plugin [%s] has been registered", p.Name)
@@ -195,12 +201,15 @@ func NewService(cfg *v1.ServerConfig) (*Service, error) {
 	svr.rc.PluginManager = svr.pluginManager
 
 	// Init group controller
+	// 初始化TCP组控制器
 	svr.rc.TCPGroupCtl = group.NewTCPGroupCtl(svr.rc.TCPPortManager)
 
 	// Init HTTP group controller
+	// 初始化HTTP组控制器
 	svr.rc.HTTPGroupCtl = group.NewHTTPGroupController(svr.httpVhostRouter)
 
 	// Init TCP mux group controller
+	// 初始化TCPMux 组控制器
 	svr.rc.TCPMuxGroupCtl = group.NewTCPMuxGroupCtl(svr.rc.TCPMuxHTTPConnectMuxer)
 
 	// Init 404 not found page
@@ -220,6 +229,7 @@ func NewService(cfg *v1.ServerConfig) (*Service, error) {
 	}
 
 	// Listen for accepting connections from client.
+	// 启动TCP监听
 	address := net.JoinHostPort(cfg.BindAddr, strconv.Itoa(cfg.BindPort))
 	ln, err := net.Listen("tcp", address)
 	if err != nil {
@@ -237,6 +247,7 @@ func NewService(cfg *v1.ServerConfig) (*Service, error) {
 	log.Infof("frps tcp listen on %s", address)
 
 	// Listen for accepting connections from client using kcp protocol.
+	// 启动KCP监听
 	if cfg.KCPBindPort > 0 {
 		address := net.JoinHostPort(cfg.BindAddr, strconv.Itoa(cfg.KCPBindPort))
 		svr.kcpListener, err = netpkg.ListenKcp(address)
@@ -246,6 +257,7 @@ func NewService(cfg *v1.ServerConfig) (*Service, error) {
 		log.Infof("frps kcp listen on udp %s", address)
 	}
 
+	// 如果QUICBindPort设置，启动quic监听
 	if cfg.QUICBindPort > 0 {
 		address := net.JoinHostPort(cfg.BindAddr, strconv.Itoa(cfg.QUICBindPort))
 		quicTLSCfg := tlsConfig.Clone()
@@ -261,6 +273,7 @@ func NewService(cfg *v1.ServerConfig) (*Service, error) {
 		log.Infof("frps quic listen on %s", address)
 	}
 
+	// 如果SSHTunnelGateway设置，启动SSHTunnelGateway监听
 	if cfg.SSHTunnelGateway.BindPort > 0 {
 		sshGateway, err := ssh.NewGateway(cfg.SSHTunnelGateway, cfg.ProxyBindAddr, svr.sshTunnelListener)
 		if err != nil {
@@ -271,6 +284,7 @@ func NewService(cfg *v1.ServerConfig) (*Service, error) {
 	}
 
 	// Listen for accepting connections from client using websocket protocol.
+	// 启动websocket监听
 	websocketPrefix := []byte("GET " + netpkg.FrpWebsocketPath)
 	websocketLn := svr.muxer.Listen(0, uint32(len(websocketPrefix)), func(data []byte) bool {
 		return bytes.Equal(data, websocketPrefix)
@@ -278,6 +292,7 @@ func NewService(cfg *v1.ServerConfig) (*Service, error) {
 	svr.websocketListener = netpkg.NewWebsocketListener(websocketLn)
 
 	// Create http vhost muxer.
+	// 如果VhostHTTPPort设置，启动http反向代理
 	if cfg.VhostHTTPPort > 0 {
 		rp := vhost.NewHTTPReverseProxy(vhost.HTTPReverseProxyOptions{
 			ResponseHeaderTimeoutS: cfg.VhostHTTPTimeout,
@@ -306,6 +321,7 @@ func NewService(cfg *v1.ServerConfig) (*Service, error) {
 	}
 
 	// Create https vhost muxer.
+	// 如果VhostHTTPSPort设置，启动https反向代理
 	if cfg.VhostHTTPSPort > 0 {
 		var l net.Listener
 		if httpsMuxOn {
@@ -326,12 +342,14 @@ func NewService(cfg *v1.ServerConfig) (*Service, error) {
 	}
 
 	// frp tls listener
+	// 启动tls 监听
 	svr.tlsListener = svr.muxer.Listen(2, 1, func(data []byte) bool {
 		// tls first byte can be 0x16 only when vhost https port is not same with bind port
 		return int(data[0]) == netpkg.FRPTLSHeadByte || int(data[0]) == 0x16
 	})
 
 	// Create nat hole controller.
+	// 创建初始化nat 服务
 	nc, err := nathole.NewController(time.Duration(cfg.NatHoleAnalysisDataReserveHours) * time.Hour)
 	if err != nil {
 		return nil, fmt.Errorf("create nat hole controller error, %v", err)
@@ -441,7 +459,7 @@ func (svr *Service) handleConnection(ctx context.Context, conn net.Conn, interna
 		}
 
 		// If login failed, send error message there.
-		// Otherwise send success message in control's work goroutine.
+		// Otherwise, send success message in control's work goroutine.
 		if err != nil {
 			xl.Warnf("register control error: %v", err)
 			_ = msg.WriteMsg(conn, &msg.LoginResp{

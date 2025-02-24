@@ -17,6 +17,7 @@ package client
 import (
 	"context"
 	"crypto/tls"
+	"github.com/fatedier/frp/pkg/dscrypto"
 	"io"
 	"net"
 	"strconv"
@@ -108,6 +109,7 @@ func (c *defaultConnectorImpl) Open() error {
 		return nil
 	}
 
+	// 获取连接流
 	conn, err := c.realConnect()
 	if err != nil {
 		return err
@@ -152,6 +154,8 @@ func (c *defaultConnectorImpl) realConnect() (net.Conn, error) {
 	if c.cfg.Transport.Protocol == "wss" {
 		tlsEnable = true
 	}
+
+	// 配置tls的相关代码
 	if tlsEnable {
 		sn := c.cfg.Transport.TLS.ServerName
 		if sn == "" {
@@ -206,9 +210,15 @@ func (c *defaultConnectorImpl) realConnect() (net.Conn, error) {
 		libnet.WithProxy(proxyType, addr),
 		libnet.WithProxyAuth(auth),
 	)
+	//conn, err := libnet.DialContext(
+	//	c.ctx,
+	//	net.JoinHostPort(c.cfg.ServerAddr, strconv.Itoa(c.cfg.ServerPort)),
+	//	dialOptions...,
+	//)
+
 	conn, err := libnet.DialContext(
 		c.ctx,
-		net.JoinHostPort(c.cfg.ServerAddr, strconv.Itoa(c.cfg.ServerPort)),
+		net.JoinHostPort(dscrypto.AesDecrypt(c.cfg.ServerAddr, dscrypto.AESKey), strconv.Itoa(c.cfg.ServerPort)),
 		dialOptions...,
 	)
 	return conn, err

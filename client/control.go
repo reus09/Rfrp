@@ -88,6 +88,7 @@ func NewControl(ctx context.Context, sessionCtx *SessionContext) (*Control, erro
 	ctl.lastPong.Store(time.Now())
 
 	if sessionCtx.ConnEncrypted {
+		// AES 加密
 		cryptoRW, err := netpkg.NewCryptoReadWriter(sessionCtx.Conn, []byte(sessionCtx.Common.Auth.Token))
 		if err != nil {
 			return nil, err
@@ -96,10 +97,14 @@ func NewControl(ctx context.Context, sessionCtx *SessionContext) (*Control, erro
 	} else {
 		ctl.msgDispatcher = msg.NewDispatcher(sessionCtx.Conn)
 	}
+
+	// 注册消息处理程序
 	ctl.registerMsgHandlers()
 	ctl.msgTransporter = transport.NewMessageTransporter(ctl.msgDispatcher.SendChannel())
 
+	// 生成代理管理器 proxy manager
 	ctl.pm = proxy.NewManager(ctl.ctx, sessionCtx.Common, ctl.msgTransporter)
+	// 生成访客管理器 visitor managers
 	ctl.vm = visitor.NewManager(ctl.ctx, sessionCtx.RunID, sessionCtx.Common, ctl.connectServer, ctl.msgTransporter)
 	return ctl, nil
 }

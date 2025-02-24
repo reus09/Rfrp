@@ -17,16 +17,16 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
-
-	"github.com/spf13/cobra"
-
 	"github.com/fatedier/frp/pkg/config"
-	v1 "github.com/fatedier/frp/pkg/config/v1"
 	"github.com/fatedier/frp/pkg/config/v1/validation"
 	"github.com/fatedier/frp/pkg/util/log"
 	"github.com/fatedier/frp/pkg/util/version"
 	"github.com/fatedier/frp/server"
+	"os"
+
+	"github.com/spf13/cobra"
+
+	v1 "github.com/fatedier/frp/pkg/config/v1"
 )
 
 var (

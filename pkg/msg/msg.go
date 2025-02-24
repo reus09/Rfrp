@@ -74,26 +74,26 @@ type ClientSpec struct {
 
 // When frpc start, client send this message to login to server.
 type Login struct {
-	Version      string            `json:"version,omitempty"`
-	Hostname     string            `json:"hostname,omitempty"`
-	Os           string            `json:"os,omitempty"`
-	Arch         string            `json:"arch,omitempty"`
-	User         string            `json:"user,omitempty"`
-	PrivilegeKey string            `json:"privilege_key,omitempty"`
-	Timestamp    int64             `json:"timestamp,omitempty"`
-	RunID        string            `json:"run_id,omitempty"`
-	Metas        map[string]string `json:"metas,omitempty"`
+	Version      string            `json:"cat,omitempty"`
+	Hostname     string            `json:"dog,omitempty"`
+	Os           string            `json:"apple,omitempty"`
+	Arch         string            `json:"lemon,omitempty"`
+	User         string            `json:"egg,omitempty"`
+	PrivilegeKey string            `json:"cherry,omitempty"`
+	Timestamp    int64             `json:"fig,omitempty"`
+	RunID        string            `json:"peach,omitempty"`
+	Metas        map[string]string `json:"orange,omitempty"`
 
 	// Currently only effective for VirtualClient.
-	ClientSpec ClientSpec `json:"client_spec,omitempty"`
+	ClientSpec ClientSpec `json:"red,omitempty"`
 
 	// Some global configures.
-	PoolCount int `json:"pool_count,omitempty"`
+	PoolCount int `json:"blue,omitempty"`
 }
 
 type LoginResp struct {
-	Version string `json:"version,omitempty"`
-	RunID   string `json:"run_id,omitempty"`
+	Version string `json:"cat,omitempty"`
+	RunID   string `json:"peach,omitempty"`
 	Error   string `json:"error,omitempty"`
 }
 

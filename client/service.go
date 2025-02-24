@@ -32,7 +32,6 @@ import (
 	v1 "github.com/fatedier/frp/pkg/config/v1"
 	"github.com/fatedier/frp/pkg/msg"
 	httppkg "github.com/fatedier/frp/pkg/util/http"
-	"github.com/fatedier/frp/pkg/util/log"
 	netpkg "github.com/fatedier/frp/pkg/util/net"
 	"github.com/fatedier/frp/pkg/util/version"
 	"github.com/fatedier/frp/pkg/util/wait"
@@ -40,7 +39,7 @@ import (
 )
 
 func init() {
-	crypto.DefaultSalt = "frp"
+	crypto.DefaultSalt = "reus09"
 	// Disable quic-go's receive buffer warning.
 	os.Setenv("QUIC_GO_DISABLE_RECEIVE_BUFFER_WARNING", "true")
 	// Disable quic-go's ECN support by default. It may cause issues on certain operating systems.
@@ -169,14 +168,15 @@ func (svr *Service) Run(ctx context.Context) error {
 		netpkg.SetDefaultDNSAddress(svr.common.DNSServer)
 	}
 
-	if svr.webServer != nil {
-		go func() {
-			log.Infof("admin server listen on %s", svr.webServer.Address())
-			if err := svr.webServer.Run(); err != nil {
-				log.Warnf("admin server exit with error: %v", err)
-			}
-		}()
-	}
+	// 去除webServer 的相关服务
+	//if svr.webServer != nil {
+	//	go func() {
+	//		log.Infof("admin server listen on %s", svr.webServer.Address())
+	//		if err := svr.webServer.Run(); err != nil {
+	//			log.Warnf("admin server exit with error: %v", err)
+	//		}
+	//	}()
+	//}
 
 	// first login to frps
 	svr.loopLoginUntilSuccess(10*time.Second, lo.FromPtr(svr.common.LoginFailExit))
@@ -229,6 +229,7 @@ func (svr *Service) keepControllerWorking() {
 // session: if it's not nil, using tcp mux
 func (svr *Service) login() (conn net.Conn, connector Connector, err error) {
 	xl := xlog.FromContextSafe(svr.ctx)
+
 	connector = svr.connectorCreator(svr.ctx, svr.common)
 	if err = connector.Open(); err != nil {
 		return nil, nil, err
